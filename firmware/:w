@@ -1,0 +1,122 @@
+#include <Time.h>
+#include <TimeAlarms.h>
+#include "SerialReceiver.h"
+
+const uint8_t MaxArgs = 4;
+const int TriggerPin = 2;
+
+const int CmdSetTriggerLow = 0;
+const int CmdSetTriggerHigh = 1;
+const int CmdSetTriggerTimed = 2;
+
+SerialReceiver receiver = SerialReceiver();
+
+struct CmdMessage 
+{
+    int num_args = 0;
+    int args[MaxArgs];
+};
+
+
+void setup()
+{
+    Serial.begin(115200);
+    pinMode(TriggerPin,OUTPUT);
+    digitalWrite(TriggerPin,LOW);
+    setTime(8,29,0,1,1,11);
+    set_trigger_high();
+    Alarm.timerOnce(2, set_trigger_low);
+
+}
+
+void loop()
+{
+    CmdMessage cmd_msg;
+
+    while (Serial.available() > 0) {
+        receiver.process(Serial.read());
+        if (receiver.messageReady()) {
+            cmd_msg = get_command_args(cmd_msg);
+        }
+    }
+
+    handle_command(cmd_msg);
+    Alarm.delay(0);
+
+}
+
+
+CmdMessage get_command_args(CmdMessage &cmd_msg)
+{
+    cmd_msg.num_args = receiver.numberOfItems();
+    for (int i=0; i<cmd_msg.num_args; i++)
+    {
+        cmd_msg.args[i] = receiver.readLong(i);
+    }
+    receiver.reset();
+    return cmd_msg;
+}
+
+
+void handle_command(CmdMessage &cmd_msg)
+{
+    if (cmd_msg.num_args > 0) 
+    {
+        // DEBUG
+        // ------------------------------------------
+        for (int i=0; i<cmd_msg.num_args; i++)
+        {
+            Serial.print("args[");
+            Serial.print(i);
+            Serial.print("] = ");
+            Serial.println(cmd_msg.args[i]);
+        }
+        Serial.println();
+        // ------------------------------------------
+
+
+        int cmd_id = cmd_msg.args[0];
+
+        switch (cmd_id)
+        {
+            case CmdSetTriggerLow:
+                set_trigger_low();
+                break;
+
+            case CmdSetTriggerHigh:
+                set_trigger_high();
+                break;
+
+            case CmdSetTriggerTimed:
+                if (cmd_msg.num_args > 1)
+                {
+                    int alarm_dt = abs(cmd_msg.args[1]);
+                    Serial.println(alarm_dt);
+                    set_trigger_high();
+                    Alarm.timerOnce(alarm_dt, set_trigger_low);
+                    //Alarm.timerOnce(2, set_trigger_low);
+                }
+                break;
+
+            default:
+                break;
+
+        }
+    }
+}
+
+void set_trigger_high()
+{
+    Serial.println("Trigger HIGH");
+    digitalWrite(TriggerPin,HIGH);
+}
+
+
+void set_trigger_low()
+{
+    Serial.println("Trigger LOW");
+    digitalWrite(TriggerPin,LOW);
+}
+
+
+
